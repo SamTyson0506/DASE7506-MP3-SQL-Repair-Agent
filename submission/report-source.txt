@@ -1,0 +1,211 @@
+DASE7506 / MINI-PROJECT 3
+
+SQL Repair Agent
+
+A CPU controller using real tool feedback, fixed public hints and schema-guided SQL edits.
+
+<b>Official test result: 195 / 240 (81.25%)</b>
+
+All three grading instances must pass for a task to count. This is the official local scorer result, not a public-example pass rate. The complete unmodified score JSON and prediction trajectories accompany this export.
+
+Setting | Implementation
+
+Benchmark | Spider-derived public evaluation v3; 480 train / 120 validation / 240 test
+
+Inference | CPU only; no live language model or deployed weights
+
+Runtime dependencies | Python 3.11 or 3.12 and sqlglot==27.29.0
+
+Agent interface | create_agent(checkpoint=None), returning an object with act(observation)
+
+Tools | Exact draft check, repair_hint, check, and schema; at most 8 charged calls
+
+Final configuration | config.json: mode=full, prefer_original=false
+
+Objective and scope
+
+The agent repairs the SQL supplied with each task. It may generate new SQL, but it has no access to benchmark files or database connections. It receives all task information and execution feedback through the official observation/action protocol. The official environment, predictor, SQLite executor and scorer were not modified.
+
+What is submitted
+
+The source export includes implementation, configuration, dependencies, this report, reproduction commands, validation ablation evidence, outputs/test.json, and outputs/test-score.json. No datasets, base weights, virtual environments or caches are included. The source archive is checked against the 16 MiB limit.
+
+Prepared 23 November 2026, Beijing time. Individual-project disclosure: OpenAI Codex assisted development and report preparation; see the provenance section.
+
+1. Feedback-driven repair loop
+
+Perceive, propose, check, submit
+
+<b>1.</b> Check the exact original SQL. This produces an error or a concrete example comparison and satisfies the required ordering before hints. <b>2.</b> Read the shared repair_hint suggestions and deduplicate them by normalized SQL. <b>3.</b> Check the first distinct hint if its normalized query has not already been checked. Prefer a matching hint, then a matching original; any such choice can still undergo the checked refinements below.
+
+<b>4.</b> If no checked SQL matches, request schema and rank remaining raw hints together with generic AST repairs. <b>5.</b> Check candidates in deterministic order. Each new observation determines which proposals remain eligible. Matching candidates may be refined using output metadata, unambiguous name binding, foreign-key paths, bag/count semantics and unused-join simplification; each changed SQL needs its own successful check. <b>6.</b> Submit a checked match, or an executable hint/draft fallback if no match is found. A fallback is not claimed to be correct.
+
+Candidate operators
+
+Operator family | Purpose
+
+Schema and joins | Resolve columns and small spelling differences; connect missing relations by breadth-first search over declared foreign keys; try declared join keys.
+
+Projection | Align the SELECT list with public example column metadata, including order and standard aggregates. No expected result rows are inserted as SQL answers.
+
+Bag/set and counts | Toggle DISTINCT; try COUNT(*); group by output columns; remove unused joins or try an appropriate direct relation scan.
+
+Comparisons | Case normalization, numeric text comparisons, partial categorical labels, and SQLite-compatible quantified comparisons.
+
+Relational semantics | Try INTERSECT for two-value "both" predicates and EXCEPT for negated relationships; recover simple frequency/grouping queries.
+
+Post-check refinement | Bind explicitly named entities to their own name fields; repair missing bridge relations; check conservative bag and unused-join alternatives.
+
+Ordering | Try aggregation for grouped superlatives and, at low priority, a reversed ordering.
+
+Selection, context and memory
+
+Ranking uses fixed rule priorities, hint order and actual feedback such as row count. Canonical SQL identities prevent retrying equivalent generated candidates. A bounded 4,096-entry cache stores only syntax-normalization strings, never answers or database feedback. The authoritative task memory is its history; each task gets a fresh agent. There is no persistent answer memory, retrieval index, deployed learned model or network service.
+
+The retrieve tool is intentionally unused. Schema-disjoint splits make direct training-SQL reuse risky, and retrieval would spend one of the eight calls. The final design spends those calls on checking SQL and schema repairs. Changing source prompts does not regenerate course hints.
+
+The deployed workflow is assisted by the fixed LLM hint cache, with no live LLM planner. Generic post-check refinements align public column metadata, repair missing bridge tables, normalize hidden frequency counts and try preserving bag semantics for joined entity-name projections. Every changed SQL is checked before selection.
+
+2. Evaluation and controlled ablations
+
+All rows below use the same released benchmark and unchanged official predictor/scorer. Accuracy requires three-instance correctness. The final implementation is held fixed; configurations remove capabilities without adding data. Validation selected the final design before the reported final test run.
+
+Validation configuration | Correct / 120 | Accuracy | Mean calls
+
+Draft check, then submit | 47 / 120 | 39.17% | 1.000
+
+No schema-guided edits | 83 / 120 | 69.17% | 2.875
+
+Full repair controller | 106 / 120 | 88.33% | 3.667
+
+The draft-only row is a diagnostic baseline. Controlled ablation 1 retains hints, checks and selection but disables AST repairs. Controlled ablation 2 disables entity-name grounding in both candidate generation and post-check refinement, while retaining all other repairs. All use the same final implementation, benchmark and official evaluation.
+
+Without entity-name grounding: <b>105/120 (87.50%)</b>, mean 3.650 charged calls. Complete ablation trajectories and unchanged scores accompany this export.
+
+Design selection
+
+Development progressed from hints only (83/120), through schema/projection edits (97/120), refined priorities (101/120), bridge reconstruction (104/120), join simplification (105/120), and entity-name grounding (106/120). Early stopping on any passing original draft scored 87/120 and was rejected. These are validation design experiments, not independent estimates. The deployed controller still inspects hints when the draft matches.
+
+Final test and resource cost
+
+Measurement | Observed result
+
+Official test | 195/240; 81.250000%
+
+Mean charged test calls | 3.8167 of 8; submit is free
+
+Prediction wall time | 50.19 seconds
+
+Scoring wall time | 97.14 seconds
+
+Combined wall time | 147.34 seconds
+
+Sampled CPU time | 484.98 process-tree CPU seconds
+
+Peak process-tree RSS | 118.2 MiB
+
+Peak process-tree VMS | 65.2 MiB
+
+Runtime model cost | 0 completions, 0 generated tokens, 0 model API calls
+
+Windows-10-10.0.26300-SP0; 32 logical CPUs available; prediction uses 4 worker(s), scoring uses four. Process-tree CPU and memory were sampled every 20 ms using psutil; short-lived processes can be missed. Measurements are approximate. psutil measures development runs and is not an agent dependency. Linux was unavailable, so Linux/bubblewrap timings are not claimed.
+
+3. Reliability and safeguards
+
+Observed failure modes
+
+<b>Example collisions.</b> Multiple SQL queries can return the same public rows, especially empty results, while differing on extra instances. The checker provides evidence, not a proof of semantic correctness. Validation shows that trusting the original whenever it passes is particularly unreliable.
+
+<b>Join multiplicity and grouping.</b> DISTINCT, COUNT(column), COUNT(*), and grouping by an identifier versus a name can agree on one instance and disagree on duplicated or null data. Fixed hints and local edits do not always select the correct multiplicity. Join trimming can also remove a relationship needed by the question.
+
+<b>Long or misleading drafts.</b> Repetitive joins, nested subqueries, hallucinated columns and correlated aliases can exceed what four or five remaining check calls can repair. Local schema reassignment can damage a correlated reference. The implementation falls back transparently instead of inventing successful feedback.
+
+<b>Language and annotation ambiguity.</b> Some training examples request a column or ordering in natural language that differs from the reference projection/order. Public column metadata helps, but it cannot recover every missing condition or resolve every ambiguous entity relationship. No task-specific reference queries were embedded to compensate.
+
+Prompt-injection threat model
+
+Task questions, cached hints, retrieved text, schema names and tool results are untrusted data. They could contain requests to ignore rules, open files, send data, execute code or change scoring. There is no instruction-following model at runtime; questions are consumed only by a few regular expressions. SQL is parsed as SQLGlot ASTs. Metadata-derived projection expressions are limited to identifiers and standard aggregates, excluding literals, subqueries and arbitrary expressions.
+
+The implementation does not eval/exec tool content, run a shell, import generated code, read database paths, fetch URLs or modify traces. Only fixed action dictionaries reach official tools. Official read-only SQL validation, table/function allowlists, byte limits, time/resource bounds and scorer replay remain in force. Candidate SQL is accepted only after real checking when a match is available. A malicious hint can still reduce accuracy or consume budget; it cannot legitimately grant new permissions or supply forged tool observations.
+
+4. Provenance and development experiments
+
+Data boundaries
+
+Training questions, SQL and permitted training-memory references informed generic rule development. Validation inputs, feedback and official validation outcomes guided design selection. Final test inputs were processed by the frozen candidate implementations through official tools; complete official evaluation was repeated to measure public-benchmark progress. No task-specific test labels, grading fingerprints or extra grading databases were read by the agent, converted into answers, or used as learned features. No database files or grading references are redistributed in this source export.
+
+Training-derived controller priors
+
+A training-only audit found 43 non-explicit-distinct cases where hints used a column count in ORDER BY or HAVING; 38 corresponding references used only COUNT(*). This motivated a checked normalization of hidden frequency counts, excluding explicit distinctness requests and LEFT JOIN queries. In 15 training cases with DISTINCT, joins, plain name projections and no grouping or explicit uniqueness/both request, 13 references preserved bag semantics. This motivated a checked name-bag candidate. These are generic structural conditions, not stored task IDs or answer SQL.
+
+Broader bag/set classifiers were also fitted using training labels only. They did not improve the selected conservative name-projection policy and are not loaded or included as runtime assets. No validation/test rows were used to fit those classifiers.
+
+Exploratory GPU LoRA trial - not deployed
+
+A supervised LoRA trial used only 480 training examples: official training-memory gold SQL, schema and real original-draft checking feedback plus the fixed hints. The base was Qwen/Qwen3-0.6B at revision c1899de289a04d12100db370d81485cdf75e47ca. Exactly 392 LoRA A/B tensors were trainable; embeddings, lm_head, biases and base weights were frozen. No validation/test examples or fingerprints entered this dataset.
+
+Trial setting | Value
+
+Base / adapter / total parameters | 596,049,920 / 10,092,544 / 606,142,464
+
+LoRA configuration | rank 16, alpha 32, dropout 0.05; attention and MLP projections; bias=none
+
+Optimization | AdamW; learning rate 0.00015; seed 42; batch 2; accumulation 4; completion-only loss
+
+Training device | RTX 4060 Laptop GPU, 8GB; bfloat16; gradient checkpointing
+
+Saved checkpoints | Epochs 1 and 2; planned four-epoch schedule; epoch 2 saved at about 559 seconds
+
+Peak allocated GPU memory | About 4.65 GiB; system-reported use including reserved memory was higher
+
+CPU validation outcome | Epoch 2 / one repair: 103/120; epoch 1 / two repairs: 101/120
+
+The trial did not improve validation over the controller, and the adapter is not used in the final submitted inference path. Training configuration, logs and data-provenance hashes are retained with the experiment evidence. The planned four epochs were stopped after saving epoch 2 to run CPU evaluation serially within the laptop RAM limit. Partial epoch-3 updates were discarded. No merged or full-model checkpoint is submitted.
+
+External assistance
+
+OpenAI Codex assisted implementation, debugging, experiment design, training/validation analysis, packaging and report preparation. No live model is loaded by the final CPU controller. The student should understand and review this assisted implementation before submitting the individual assignment.
+
+5. Exact reproduction and submission
+
+Provision and run offline
+
+Obtain the exact official package separately. Its original ZIP SHA-256 is 406d69507ccf955a53b35db1c1368bd7452565ebd928b47d0f6161fe35b99a61. The supplied checksum matched the downloaded archive, and the official check_data command verified bank, schema-split and database hashes. Install the sole runtime dependency before going offline.
+
+# Linux; absolute paths to separately extracted directories
+OFFICIAL=/path/to/MP3_SQL_student_package
+SOURCE=/path/to/submission
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r "$SOURCE/requirements.txt"
+export PYTHONUTF8=1
+export PYTHONPATH="$SOURCE:$OFFICIAL"
+export OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 MKL_NUM_THREADS=4
+python -m mp3_sql.check_data
+python "$SOURCE/reproduce.py" --official "$OFFICIAL" --split test
+
+The wrapper uses the current Python interpreter to invoke unchanged official modules, with four workers and the source directory on PYTHONPATH. It accepts paths with spaces and config.json explicitly. For instructor isolation, run the same official score command with --isolated on a provisioned Linux/bubblewrap environment. There are no weights or adapters to provision.
+
+Repeat the two ablations
+
+python "$SOURCE/reproduce.py" --official "$OFFICIAL" \
+  --split validation --config "$SOURCE/ablations/draft_only.json" \
+  --output-dir "$SOURCE/experiments/draft_only"
+python "$SOURCE/reproduce.py" --official "$OFFICIAL" \
+  --split validation --config "$SOURCE/ablations/hints_only.json" \
+  --output-dir "$SOURCE/experiments/hints_only"
+python "$SOURCE/reproduce.py" --official "$OFFICIAL" \
+  --split validation --config "$SOURCE/ablations/no_entity_names.json" \
+  --output-dir "$SOURCE/experiments/no_entity_names"
+python "$SOURCE/reproduce.py" --official "$OFFICIAL" \
+  --split validation --output-dir "$SOURCE/experiments/full"
+
+Artifact integrity and handoff
+
+outputs/test-score.json is the complete unchanged official score, including per-question results and benchmark, bank, manifest, scorer, executor and prediction hashes. outputs/test.json includes all tool trajectories, allowing independent causal replay. These two files must remain paired. MANIFEST.sha256 records the export files; timestamps in newly generated outputs may differ, but deterministic SQL predictions and correctness should reproduce.
+
+Upload the final ZIP as an immutable HTTPS artifact. On the course page, select outputs/test-score.json, enter the student ID and source ZIP URL, prepare the score submission, then actually create the GitHub issue. There is no LoRA link. Local generation alone does not submit a result. Deadline: 30 November 2026, 23:59 Beijing time; peer review: 1-7 December, closing at 23:59. Final grade bands depend on the final eligible reproduced ranking.
+
+References and attribution
+
+Course specification and submission page: https://xudongwu-0.github.io/courses/dase7506/mp3/ . Local official README.md and NOTICE supplied the benchmark and eligibility rules. Spider-derived data and course modifications retain CC BY-SA 4.0 attribution; databases are not redistributed in this export. SQLGlot 27.29.0 is installed separately under its upstream license. Cached hints remain part of the unchanged official package.

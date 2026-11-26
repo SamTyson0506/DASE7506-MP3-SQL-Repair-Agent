@@ -1,0 +1,8 @@
+{
+  "planned_epochs": 4,
+  "fully_saved_epochs": [1, 2],
+  "selected_for_first_complete_cpu_evaluation": 2,
+  "interruption": "Stopped the training process after epoch 2 was saved, during early epoch 3, to run memory-intensive CPU evaluation serially on a 16GB laptop.",
+  "partial_epoch_3_weights_exported": false,
+  "reproduction_note": "Use --epochs 4 --stop-after-epoch 2 to retain the original four-epoch learning-rate schedule and reproduce the saved epoch-2 training recipe. Grading loads the submitted adapter; retraining is not required."
+}

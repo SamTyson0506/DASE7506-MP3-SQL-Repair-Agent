@@ -1,0 +1,31 @@
+{
+  "platform": "Windows-10-10.0.26300-SP0",
+  "python": "3.11.7",
+  "logical_cpus": 32,
+  "workers": 4,
+  "split": "test",
+  "source_sha256": {
+    "repairs.py": "7c4f87bd0f549d66aa0cde70e806dc5f5f0b18635fd72dd0cd9d374b15541e02",
+    "reproduce.py": "a20f3830d7a304cfcf69159eff038901f905d062b5b6cf6255e3a8cb64eab3bd",
+    "submission.py": "a9a827e3ed48decac0056a1525f82f9530df6a518205e7a50bb015d2413eb713"
+  },
+  "measurement_note": "Process-tree RSS/VMS peaks and CPU time are sampled; short-lived children may be missed. Windows measurements; Linux not measured.",
+  "predict": {
+    "wall_seconds": 50.19443789997604,
+    "sampled_cpu_seconds": 154.21875,
+    "peak_tree_rss_bytes": 123592704,
+    "peak_tree_vms_bytes": 68325376,
+    "observed_processes": 1140,
+    "sampling_interval_seconds": 0.02
+  },
+  "score": {
+    "wall_seconds": 97.14293960001669,
+    "sampled_cpu_seconds": 330.765625,
+    "peak_tree_rss_bytes": 123957248,
+    "peak_tree_vms_bytes": 67440640,
+    "observed_processes": 2580,
+    "sampling_interval_seconds": 0.02
+  },
+  "total_wall_seconds": 147.33737749999273,
+  "predictions_sha256": "66ed98d041a245f91d3f90f7fd57ca83122bb7628f8fec5116e94f1f14db6ddb"
+}

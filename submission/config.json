@@ -1,0 +1,10 @@
+{
+  "mode": "full",
+  "prefer_original": false,
+  "refine_projection": true,
+  "normalize_hidden_counts": true,
+  "rebuild_bridges": true,
+  "preserve_bags": true,
+  "trim_inert_joins": true,
+  "ground_entity_names": true
+}
